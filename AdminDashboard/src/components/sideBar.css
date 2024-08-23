@@ -1,0 +1,5 @@
+.avatar-hovered:hover {
+    box-shadow: 0 0 30px #33A4EE;
+    transition: box-shadow 0.3s ease-in-out;
+  }
+  
