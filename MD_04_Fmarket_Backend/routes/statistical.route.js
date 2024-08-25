@@ -9,6 +9,8 @@ router.get("/get-top-store-by-revenue", statisticalController.getTopStoreByReven
 router.get("/get-top-product-by-revenue", statisticalController.getTopProductByRevenue);
 router.get("/get-revenue-all-store-by-month", statisticalController.revenueAllStoreByMonth);
 router.get("/get-revenue-all-store-by-quarter", statisticalController.revenueAllStoreByQuarter);
+router.get("/get-all-products-statistics", statisticalController.getAllProductsStatistics);
+router.get('/revenue', statisticalController.getTotalRevenue);
 
 module.exports = router;
 

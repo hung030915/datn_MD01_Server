@@ -1,6 +1,7 @@
 const db = require("../config/ConnectDB");
 const optionModel = require("../models/Option");
 const orderModel = require("../models/Orders");
+const productModel = require("../models/Products");
 
 const calculateRevenueAllTime = async (req, res, next) => {
   try {
@@ -277,18 +278,34 @@ const getTopStoreByRevenue = async (req, res, next) => {
 
 const getTopProductByRevenue = async (req, res, next) => {
   try {
+    const { sort } = req.query;
+
+    // Get current date and determine the date range based on the sort parameter
+    const now = new Date();
+    let matchStage = { status: 'Đã giao hàng' };
+
+    if (sort === 'day') {
+      matchStage.createdAt = { $gte: new Date(now.setHours(0, 0, 0, 0)) };
+    } else if (sort === 'month') {
+      matchStage.createdAt = {
+        $gte: new Date(now.getFullYear(), now.getMonth(), 1),
+      };
+    } else if (sort === 'year') {
+      matchStage.createdAt = {
+        $gte: new Date(now.getFullYear(), 0, 1),
+      };
+    }
+
     const top5Products = await orderModel.order.aggregate([
       {
-        $match: {
-          status: 'Đã giao hàng',
-        },
+        $match: matchStage,
       },
       {
         $unwind: '$productsOrder',
       },
       {
         $lookup: {
-          from: 'options', 
+          from: 'options',
           localField: 'productsOrder.option_id',
           foreignField: '_id',
           as: 'optionInfo',
@@ -299,7 +316,7 @@ const getTopProductByRevenue = async (req, res, next) => {
       },
       {
         $lookup: {
-          from: 'products', // Tên bảng product trong mô hình của bạn
+          from: 'products',
           localField: 'optionInfo.product_id',
           foreignField: '_id',
           as: 'productInfo',
@@ -313,7 +330,8 @@ const getTopProductByRevenue = async (req, res, next) => {
           _id: '$productInfo._id',
           productName: { $first: '$productInfo.name' },
           totalRevenue: { $sum: '$total_price' },
-          productImage: { $first: '$optionInfo.image' }, 
+          productImage: { $first: '$optionInfo.image' },
+          totalQuantitySold: { $sum: '$productsOrder.quantity' },
         },
       },
       {
@@ -321,7 +339,8 @@ const getTopProductByRevenue = async (req, res, next) => {
           product_id: '$_id',
           productName: 1,
           totalRevenue: 1,
-          productImage: 1, // Bao gồm thông tin ảnh trong kết quả
+          productImage: 1,
+          totalQuantitySold: 1,
         },
       },
       {
@@ -340,7 +359,7 @@ const getTopProductByRevenue = async (req, res, next) => {
   } catch (error) {
     return res.status(500).json({ code: 500, message: error.message });
   }
-}
+};
 
 // 2023-11-29T16:15:29.307+00:00
 
@@ -467,6 +486,202 @@ const revenueAllStoreByQuarter = async (req, res, next) => {
     return res.status(500).json({ code: 500, message: error.message });
   }
 }
+const getAllProductsStatistics = async (req, res, next) => {
+  try {
+    const { sort } = req.query;
+
+    // Get current date
+    const now = new Date();
+    let matchCondition = {};
+
+    // Set match conditions based on sort type
+    if (sort === 'day') {
+      matchCondition = {
+        $expr: {
+          $and: [
+            { $eq: [{ $dayOfMonth: '$orders.createdAt' }, { $dayOfMonth: now }] },
+            { $eq: [{ $month: '$orders.createdAt' }, { $month: now }] },
+            { $eq: [{ $year: '$orders.createdAt' }, { $year: now }] }
+          ]
+        }
+      };
+    } else if (sort === 'month') {
+      matchCondition = {
+        $expr: {
+          $and: [
+            { $eq: [{ $month: '$orders.createdAt' }, { $month: now }] },
+            { $eq: [{ $year: '$orders.createdAt' }, { $year: now }] }
+          ]
+        }
+      };
+    } else if (sort === 'year') {
+      matchCondition = {
+        $expr: { $eq: [{ $year: '$orders.createdAt' }, { $year: now }] }
+      };
+    }
+
+    const productStatistics = await productModel.product.aggregate([
+      // Lookup and unwind stages...
+      {
+        $lookup: {
+          from: 'options',
+          localField: '_id',
+          foreignField: 'product_id',
+          as: 'options',
+        },
+      },
+      {
+        $unwind: {
+          path: '$options',
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $lookup: {
+          from: 'orders',
+          localField: 'options._id',
+          foreignField: 'productsOrder.option_id',
+          as: 'orders',
+        },
+      },
+      {
+        $unwind: {
+          path: '$orders',
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $unwind: {
+          path: '$orders.productsOrder',
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      // Apply the match condition based on sort type
+      {
+        $match: {
+          $or: [
+            {
+              $and: [
+                matchCondition,
+                { 'orders.status': 'Đã giao hàng' },
+              ]
+            },
+            { 'orders': { $exists: false } }, // Include products with no orders
+          ],
+        },
+      },
+      // Group, project, and sort stages...
+      {
+        $group: {
+          _id: '$_id',
+          productName: { $first: '$name' },
+          totalQuantitySold: { $sum: { $cond: ['$orders.productsOrder.quantity', '$orders.productsOrder.quantity', 0] } },
+          totalRevenue: { $sum: { $cond: ['$orders.total_price', '$orders.total_price', 0] } },
+          totalRates: { $first: { $size: '$product_review' } },
+        },
+      },
+      {
+        $project: {
+          product_id: '$_id',
+          productName: 1,
+          totalQuantitySold: 1,
+          totalRevenue: 1,
+          totalRates: 1,
+        },
+      },
+      {
+        $sort: { totalRevenue: -1 },
+      },
+    ]);
+
+    return res.status(200).json({
+      code: 200,
+      message: "Thống kê tất cả sản phẩm!",
+      data: productStatistics,
+    });
+  } catch (error) {
+    return res.status(500).json({ code: 500, message: error.message });
+  }
+}
+
+const getTotalRevenue = async (req, res) => {
+  try {
+    const { type, startDate, endDate } = req.query;
+    let matchCondition = { status: "Đã giao hàng" };
+    let groupCondition = {};
+    let projectCondition = {};
+
+    if (startDate && endDate) {
+      // Nếu có startDate và endDate, xử lý theo khoảng thời gian
+      matchCondition.createdAt = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      };
+      groupCondition = {
+        _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+        totalRevenue: { $sum: "$total_price" },
+      };
+      projectCondition = {
+        _id: 0,
+        totalRevenue: 1,
+        date: "$_id",
+      };
+    } else {
+      // Xử lý theo type như trước
+      switch (type) {
+        case "day":
+        case "month":
+          groupCondition = {
+            _id: type === "day" ? { $dayOfWeek: "$createdAt" } : { $dayOfMonth: "$createdAt" },
+            date: { $first: "$createdAt" },
+            totalRevenue: { $sum: "$total_price" },
+          };
+          projectCondition = {
+            _id: 0,
+            totalRevenue: 1,
+            [type]: "$_id",
+            date: { $dateToString: { format: "%d/%m", date: "$date" } },
+          };
+          break;
+        case "year":
+          groupCondition = {
+            _id: { $month: "$createdAt" },
+            totalRevenue: { $sum: "$total_price" },
+          };
+          projectCondition = {
+            _id: 0,
+            totalRevenue: 1,
+            month: "$_id",
+            date: {
+              $let: {
+                vars: {
+                  monthsInVietnamese: [
+                    "", "Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6",
+                    "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"
+                  ]
+                },
+                in: { $arrayElemAt: ["$$monthsInVietnamese", "$_id"] }
+              }
+            },
+          };
+          break;
+        default:
+          return res.status(400).json({ error: "Invalid type parameter" });
+      }
+    }
+
+    const revenue = await orderModel.order.aggregate([
+      { $match: matchCondition },
+      { $group: groupCondition },
+      { $project: projectCondition },
+      { $sort: { date: 1 } },
+    ]);
+
+    res.status(200).json(revenue);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 
 module.exports = {
   calculateRevenueAllTime,
@@ -476,4 +691,6 @@ module.exports = {
   getTopProductByRevenue,
   revenueAllStoreByMonth,
   revenueAllStoreByQuarter,
+  getAllProductsStatistics,
+  getTotalRevenue
 };

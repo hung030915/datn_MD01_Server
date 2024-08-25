@@ -48,10 +48,10 @@ const App = () => {
       getItem(<Link to={"/categories"}>Loại sản phẩm</Link>, "/categories"),
       getItem(<Link to="/banner">Quảng cáo</Link>, "/banner"),
     ]),
-    // getItem("Thống kê", "chart", <DocumentChartBarIcon className="w-5 h-5" />, [
-    //   getItem(<Link to="/chart/product">Sản phẩm</Link>, "/chart/product"),
-    //   getItem(<Link to="/chart/store">Cửa hàng</Link>, "/chart/store"),
-    // ]),
+    getItem("Thống kê", "chart", <DocumentChartBarIcon className="w-5 h-5" />, [
+      getItem(<Link to="/chart/product">Sản phẩm</Link>, "/chart/product"),
+      // getItem(<Link to="/chart/store">Cửa hàng</Link>, "/chart/store"),
+    ]),
     getItem(
       <Link to={"/invoice"}>Hóa đơn</Link>,
       "/invoice",

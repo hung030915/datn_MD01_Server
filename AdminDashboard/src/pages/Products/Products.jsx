@@ -286,7 +286,7 @@ const Products = () => {
           }}
           allowClear
           size="middle"
-          placeholder="Search to select category"
+          placeholder="tìm kiếm theo loại sản phẩm"
           onChange={(value) => {
             console.log(value);
             setSelectedCategory(value);
@@ -314,7 +314,7 @@ const Products = () => {
             navigate("/products/create");
           }}
         >
-          create new a product
+          Tạo sản phẩm
         </Button>
       </div>
       <Table

@@ -1,11 +1,9 @@
-// eslint-disable-next-line no-unused-vars
-import React , { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import "./login.css";
 import {
   Card,
   Typography,
   Button,
-  // eslint-disable-next-line no-unused-vars
   Checkbox,
   Form,
   Input,
@@ -15,7 +13,6 @@ import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchLoginRequest } from "../../redux/actions/Auth";
 import Cookies from "js-cookie";
-// eslint-disable-next-line no-unused-vars
 import { jwtDecode } from "jwt-decode";
 
 const { Title } = Typography;
